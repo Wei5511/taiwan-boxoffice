@@ -14,10 +14,57 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 # For direct SQLite connection (if needed for specific operations)
 sqlite_file_name = "boxoffice.db" # Assuming this is the SQLite database file
+
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+except ImportError:
+    psycopg2 = None
+    RealDictCursor = None
+
 def get_db_connection():
-    conn = sqlite3.connect(sqlite_file_name)
-    conn.row_factory = sqlite3.Row
-    return conn
+    db_url = os.getenv("DATABASE_URL")
+    if db_url and psycopg2:
+        if db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql://", 1)
+        
+        # Connect to PostgreSQL and wrap for SQLite compatibility
+        conn = psycopg2.connect(db_url, cursor_factory=RealDictCursor)
+        
+        class CursorWrapper:
+            def __init__(self, cursor):
+                self._cursor = cursor
+            def execute(self, query, params=()):
+                if '?' in query:
+                    # Very simple replace: assuming no literal '?' inside strings
+                    query = query.replace('?', '%s')
+                self._cursor.execute(query, params)
+                return self
+            def fetchall(self):
+                return self._cursor.fetchall()
+            def fetchone(self):
+                return self._cursor.fetchone()
+            def close(self):
+                self._cursor.close()
+            @property
+            def description(self):
+                return self._cursor.description
+        
+        class ConnWrapper:
+            def __init__(self, conn):
+                self._conn = conn
+            def cursor(self):
+                return CursorWrapper(self._conn.cursor())
+            def close(self):
+                self._conn.close()
+            def commit(self):
+                self._conn.commit()
+                
+        return ConnWrapper(conn)
+    else:
+        conn = sqlite3.connect(sqlite_file_name)
+        conn.row_factory = sqlite3.Row
+        return conn
 
 # --- Scheduled Task ---
 _scrape_lock = threading.Lock()
