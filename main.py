@@ -6,6 +6,7 @@ from sqlmodel import Session, select, func, col, text
 from typing import List, Optional, Dict, Any
 from datetime import date, datetime, timedelta
 import calendar
+import traceback
 from models import Movie, WeeklyBoxOffice, DailyShowtime
 from database import engine, get_session
 import sqlite3
@@ -784,81 +785,74 @@ def get_market_stats(
 @app.get("/market-stats")
 def get_market_stats(session: Session = Depends(get_session)):
     """
-    Get aggregated weekly market statistics:
-    - Total Revenue
-    - Movie Count
-    - Top Movie of the Week
-    - Growth Rate (Week-over-Week)
+    Get aggregated weekly market statistics.
+    Wrapped in try/except for production error visibility.
     """
-    # 1. Fetch all weekly records joined with Movie to get names
-    results = session.exec(
-        select(WeeklyBoxOffice, Movie.name)
-        .join(Movie, WeeklyBoxOffice.movie_id == Movie.id)
-        .order_by(WeeklyBoxOffice.report_date_end.desc())
-    ).all()
-    
-    # 2. Aggregate in Python (with NULL guards for PostgreSQL compatibility)
-    weekly_agg = {}
-    
-    for record, movie_name in results:
-        # Skip records with NULL date (PostgreSQL is strict)
-        if record.report_date_end is None:
-            continue
-
-        date_key = str(record.report_date_end)
+    try:
+        results = session.exec(
+            select(WeeklyBoxOffice, Movie.name)
+            .join(Movie, WeeklyBoxOffice.movie_id == Movie.id)
+            .order_by(WeeklyBoxOffice.report_date_end.desc())
+        ).all()
         
-        if date_key not in weekly_agg:
-            iso_cal = record.report_date_end.isocalendar()
-            year = iso_cal[0]
-            week = iso_cal[1]
+        weekly_agg = {}
+        
+        for record, movie_name in results:
+            if record.report_date_end is None:
+                continue
+
+            date_key = str(record.report_date_end)
             
-            weekly_agg[date_key] = {
-                "year": year,
-                "week": week,
-                # Serialize to string for JSON safety (PostgreSQL returns date objects)
-                "start_date": str(record.report_date_start) if record.report_date_start else None,
-                "end_date": str(record.report_date_end),
-                "total_revenue": 0,
-                "movie_count": 0,
-                "max_revenue": -1,
-                "top_movie": "N/A"
-            }
-        
-        rec = weekly_agg[date_key]
-        # Guard against NULL weekly_revenue
-        revenue = record.weekly_revenue or 0
-        rec["total_revenue"] += revenue
-        rec["movie_count"] += 1
-        
-        if revenue > rec["max_revenue"]:
-            rec["max_revenue"] = revenue
-            rec["top_movie"] = movie_name
+            if date_key not in weekly_agg:
+                iso_cal = record.report_date_end.isocalendar()
+                year = iso_cal[0]
+                week = iso_cal[1]
+                
+                weekly_agg[date_key] = {
+                    "year": year,
+                    "week": week,
+                    "start_date": str(record.report_date_start) if record.report_date_start else None,
+                    "end_date": str(record.report_date_end),
+                    "total_revenue": 0,
+                    "movie_count": 0,
+                    "max_revenue": -1,
+                    "top_movie": "N/A"
+                }
+            
+            rec = weekly_agg[date_key]
+            revenue = record.weekly_revenue or 0
+            rec["total_revenue"] += revenue
+            rec["movie_count"] += 1
+            
+            if revenue > rec["max_revenue"]:
+                rec["max_revenue"] = revenue
+                rec["top_movie"] = movie_name
 
-    # 3. Sort by date ascending for growth calculation
-    stats_list = sorted(weekly_agg.values(), key=lambda x: x["end_date"])
-    
-    # 4. Calculate Growth Rate
-    final_output = []
-    for i, stats in enumerate(stats_list):
-        growth_rate = 0.0
-        if i > 0:
-            prev_revenue = stats_list[i-1]["total_revenue"]
-            if prev_revenue > 0:
-                growth_rate = (stats["total_revenue"] - prev_revenue) / prev_revenue
+        stats_list = sorted(weekly_agg.values(), key=lambda x: x["end_date"])
         
-        final_output.append({
-            "year": stats["year"],
-            "week": stats["week"],
-            "start_date": stats["start_date"],
-            "end_date": stats["end_date"],
-            "total_revenue": stats["total_revenue"],
-            "movie_count": stats["movie_count"],
-            "top_movie": stats["top_movie"],
-            "growth_rate": growth_rate
-        })
-        
-    # Return reverse sorted (newest first) for UI
-    return final_output[::-1]
+        final_output = []
+        for i, stats in enumerate(stats_list):
+            growth_rate = 0.0
+            if i > 0:
+                prev_revenue = stats_list[i-1]["total_revenue"]
+                if prev_revenue > 0:
+                    growth_rate = (stats["total_revenue"] - prev_revenue) / prev_revenue
+            
+            final_output.append({
+                "year": stats["year"],
+                "week": stats["week"],
+                "start_date": stats["start_date"],
+                "end_date": stats["end_date"],
+                "total_revenue": stats["total_revenue"],
+                "movie_count": stats["movie_count"],
+                "top_movie": stats["top_movie"],
+                "growth_rate": growth_rate
+            })
+            
+        return final_output[::-1]
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"market-stats error: {str(e)}")
 
 @app.get("/period-stats")
 def get_period_stats(
@@ -868,19 +862,18 @@ def get_period_stats(
 ):
     """
     Get statistics for a specific period.
-    FIXED: Always sums weekly_revenue only (never cumulative_revenue).
-    Filters by report_date_start so each week belongs to exactly one period.
+    Wrapped in try/except for production error visibility.
     """
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    start_date = None
-    end_date = None
-    prev_start = None
-    prev_end = None
-    growth_rate = 0.0
-
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        start_date = None
+        end_date = None
+        prev_start = None
+        prev_end = None
+        growth_rate = 0.0
+
         if type == 'week':
             if number is None:
                 raise HTTPException(status_code=400, detail="Week number required for type='week'")
@@ -912,102 +905,101 @@ def get_period_stats(
         else:
             raise HTTPException(status_code=400, detail="Invalid type")
 
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid date parameters: {e}")
+        # ALL TIME
+        if type == 'all_time':
+            rows = cursor.execute("""
+                SELECT m.id, m.name, m.release_date,
+                       COALESCE(MAX(w.cumulative_revenue), 0) as total_rev,
+                       COALESCE(MAX(w.cumulative_tickets), 0) as total_tickets
+                FROM weeklyboxoffice w
+                JOIN movie m ON w.movie_id = m.id
+                GROUP BY m.id, m.name, m.release_date
+                ORDER BY total_rev DESC
+                LIMIT 200
+            """).fetchall()
 
-    # ALL TIME
-    if type == 'all_time':
-        rows = cursor.execute("""
+            total_revenue = cursor.execute(
+                "SELECT COALESCE(SUM(weekly_revenue), 0) as total FROM weeklyboxoffice"
+            ).fetchone()["total"] or 0
+
+            real_count = cursor.execute("SELECT COUNT(*) as cnt FROM movie").fetchone()["cnt"]
+            conn.close()
+
+            return {
+                "summary": {
+                    "start_date": "2016-01-01",
+                    "end_date": str(date.today()),
+                    "total_revenue": total_revenue,
+                    "growth_rate": 0,
+                    "movie_count": real_count
+                },
+                "rankings": [
+                    {"rank": i + 1, "id": r["id"], "name": r["name"],
+                     "revenue": r["total_rev"] or 0, "tickets": r["total_tickets"] or 0,
+                     "release_date": str(r["release_date"]) if r["release_date"] else None}
+                    for i, r in enumerate(rows)
+                ]
+            }
+
+        # NORMAL PERIOD (week / month / year)
+        start_str = str(start_date)
+        end_str   = str(end_date)
+
+        total_revenue = cursor.execute("""
+            SELECT COALESCE(SUM(w.weekly_revenue), 0) as total
+            FROM weeklyboxoffice w
+            WHERE w.report_date_start >= ? AND w.report_date_start <= ?
+        """, (start_str, end_str)).fetchone()["total"] or 0
+
+        movie_count = cursor.execute("""
+            SELECT COUNT(DISTINCT w.movie_id) as cnt
+            FROM weeklyboxoffice w
+            WHERE w.report_date_start >= ? AND w.report_date_start <= ?
+        """, (start_str, end_str)).fetchone()["cnt"] or 0
+
+        ranking_rows = cursor.execute("""
             SELECT m.id, m.name, m.release_date,
-                   MAX(w.cumulative_revenue) as total_rev,
-                   MAX(w.cumulative_tickets) as total_tickets
+                   COALESCE(SUM(w.weekly_revenue), 0) as period_rev,
+                   COALESCE(SUM(w.weekly_tickets), 0) as period_tickets
             FROM weeklyboxoffice w
             JOIN movie m ON w.movie_id = m.id
+            WHERE w.report_date_start >= ? AND w.report_date_start <= ?
             GROUP BY m.id, m.name, m.release_date
-            ORDER BY total_rev DESC
-            LIMIT 200
-        """).fetchall()
+            ORDER BY period_rev DESC
+        """, (start_str, end_str)).fetchall()
 
-        total_revenue = cursor.execute(
-            "SELECT COALESCE(SUM(weekly_revenue), 0) as total FROM weeklyboxoffice"
-        ).fetchone()["total"] or 0
+        if prev_start and prev_end:
+            prev_row = cursor.execute("""
+                SELECT COALESCE(SUM(weekly_revenue), 0) as prev_total
+                FROM weeklyboxoffice
+                WHERE report_date_start >= ? AND report_date_start <= ?
+            """, (str(prev_start), str(prev_end))).fetchone()
+            prev_revenue = prev_row["prev_total"] if prev_row else 0
+            if prev_revenue and prev_revenue > 0:
+                growth_rate = (total_revenue - prev_revenue) / prev_revenue
 
-        real_count = cursor.execute("SELECT COUNT(*) as cnt FROM movie").fetchone()["cnt"]
         conn.close()
 
         return {
             "summary": {
-                "start_date": "2016-01-01",
-                "end_date": str(date.today()),
+                "start_date": start_str,
+                "end_date": end_str,
                 "total_revenue": total_revenue,
-                "growth_rate": 0,
-                "movie_count": real_count
+                "growth_rate": growth_rate,
+                "movie_count": movie_count
             },
             "rankings": [
                 {"rank": i + 1, "id": r["id"], "name": r["name"],
-                 "revenue": r["total_rev"], "tickets": r["total_tickets"],
-                 "release_date": r["release_date"]}
-                for i, r in enumerate(rows)
+                 "revenue": r["period_rev"] or 0, "tickets": r["period_tickets"] or 0,
+                 "release_date": str(r["release_date"]) if r["release_date"] else None}
+                for i, r in enumerate(ranking_rows)
             ]
         }
-
-    # NORMAL PERIOD (week / month / year)
-    # KEY FIX: filter using report_date_start (the Monday the week began).
-    # This prevents cross-boundary inflation — each weekly record is counted
-    # in only ONE period. We ALWAYS sum weekly_revenue, never cumulative_revenue.
-    start_str = str(start_date)
-    end_str   = str(end_date)
-
-    total_revenue = cursor.execute("""
-        SELECT COALESCE(SUM(w.weekly_revenue), 0) as total
-        FROM weeklyboxoffice w
-        WHERE w.report_date_start >= ? AND w.report_date_start <= ?
-    """, (start_str, end_str)).fetchone()["total"] or 0
-
-    movie_count = cursor.execute("""
-        SELECT COUNT(DISTINCT w.movie_id) as cnt
-        FROM weeklyboxoffice w
-        WHERE w.report_date_start >= ? AND w.report_date_start <= ?
-    """, (start_str, end_str)).fetchone()["cnt"] or 0
-
-    ranking_rows = cursor.execute("""
-        SELECT m.id, m.name, m.release_date,
-               SUM(w.weekly_revenue) as period_rev,
-               SUM(w.weekly_tickets) as period_tickets
-        FROM weeklyboxoffice w
-        JOIN movie m ON w.movie_id = m.id
-        WHERE w.report_date_start >= ? AND w.report_date_start <= ?
-        GROUP BY m.id, m.name, m.release_date
-        ORDER BY period_rev DESC
-    """, (start_str, end_str)).fetchall()
-
-    if prev_start and prev_end:
-        prev_row = cursor.execute("""
-            SELECT COALESCE(SUM(weekly_revenue), 0) as prev_total
-            FROM weeklyboxoffice
-            WHERE report_date_start >= ? AND report_date_start <= ?
-        """, (str(prev_start), str(prev_end))).fetchone()
-        prev_revenue = prev_row["prev_total"] if prev_row else 0
-        if prev_revenue > 0:
-            growth_rate = (total_revenue - prev_revenue) / prev_revenue
-
-    conn.close()
-
-    return {
-        "summary": {
-            "start_date": start_str,
-            "end_date": end_str,
-            "total_revenue": total_revenue,
-            "growth_rate": growth_rate,
-            "movie_count": movie_count
-        },
-        "rankings": [
-            {"rank": i + 1, "id": r["id"], "name": r["name"],
-             "revenue": r["period_rev"], "tickets": r["period_tickets"],
-             "release_date": r["release_date"]}
-            for i, r in enumerate(ranking_rows)
-        ]
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"period-stats error: {str(e)}")
 
 
 
