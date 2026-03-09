@@ -19,7 +19,7 @@ if IS_PRODUCTION:
     DATABASE_URL = (
         f"postgresql://{DB_USER}:{encoded_password}"
         f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-        f"?sslmode=require&supavisor_session_id=main"
+        f"?sslmode=require"
     )
     print(f"[database.py] Using PostgreSQL: {DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
     engine = create_engine(DATABASE_URL, echo=False)

@@ -152,15 +152,10 @@ app = FastAPI(title="Taiwan Box Office API", lifespan=lifespan, redirect_slashes
 
 
 # CORS Middleware - Production Ready
-# NOTE: allow_credentials=True is INCOMPATIBLE with allow_origins=["*"].
-# Browsers enforce CORS spec: wildcard origin cannot be used with credentials.
-# Since our API is stateless (no cookies/sessions), credentials=False is correct.
-allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "*")
-allowed_origins = allowed_origins_env.split(",") if allowed_origins_env != "*" else ["*"]
-
+# NOTE: allow_credentials=False is used with allow_origins=["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -274,77 +269,29 @@ def get_movies(
     year: int = None,
     week: int = None
 ):
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
-    # STEP 1: Determine the Target Date
-    target_year = year
-    target_week = week
-    
-    # LOGIC FIX: Only force date if NOT searching
-    # If NO search and NO date -> Force Latest (Existing logic)
-    if not search and (not target_year or not target_week):
-        cursor.execute("SELECT MAX(report_date_start) FROM weeklyboxoffice")
-        latest_date_result = cursor.fetchone()
+        # STEP 1: Determine the Target Date
+        target_year = year
+        target_week = week
         
-        if not latest_date_result or not latest_date_result[0]:
-             # DB is completely empty
-            conn.close()
-            return {"movies": [], "total": 0, "page": page, "limit": limit, "total_pages": 0}
+        # LOGIC FIX: Only force date if NOT searching
+        # If NO search and NO date -> Force Latest (Existing logic)
+        if not search and (not target_year or not target_week):
+            cursor.execute("SELECT MAX(report_date_start) FROM weeklyboxoffice")
+            latest_date_result = cursor.fetchone()
             
-        target_date = latest_date_result[0]
-        # print(f"DEBUG: Using latest available report date: {target_date}")
-    else:
-        # If searching, we might NOT have a target date, which is fine (global search)
-        # If user provided specific date, we use it (will be converted to logic below if needed)
-        # But wait, original code used report_date_start.
-        # If user provides year/week, we need to find the matching report_date_start?
-        # Actually my previous fix changed it to query by report_date_start. 
-        # But the User input logic uses year/week in this prompt. 
-        # Let's align with the prompt's logic but keep my Schema fix (lowercase tables).
-        pass
-
-    # Re-implementing based on Schema (weeklyboxoffice uses report_date_start/end, not year/week columns directly? 
-    # Wait, earlier I found the table ONLY has report_date_start/end.
-    # The prompt's logic: query += " AND w.year = ? AND w.week = ?" 
-    # This implies the prompt thinks year/week columns exist. 
-    # BUT I KNOW THEY DON'T by default in my schema fix. 
-    # Actually wait, `weeklyboxoffice` table schema from Step 2164:
-    # (0, 'id', ... (2, 'report_date_start'), (3, 'report_date_end') ...
-    # There are NO year/week columns.
-    
-    # So I must adapt the prompt's logic to use report_date_start.
-    # OR better: The "Latest Date" logic I implemented uses `report_date_start`.
-    
-    # If search is present, I should NOT filter by date at all unless specified.
-    
-    query = """
-        SELECT m.id, m.name, m.release_date, m.country, m.distributor,
-               w.weekly_revenue, w.cumulative_revenue, w.theater_count, w.weekly_tickets,
-               w.report_date_start, w.report_date_end
-        FROM movie m
-        JOIN weeklyboxoffice w ON m.id = w.movie_id
-        WHERE 1=1
-    """
-    params = []
-
-    # Refined Logic:
-
-    # 1. Base Query
-    if search:
-        query = """
-            SELECT m.id, m.name, m.release_date, m.country, m.distributor,
-                   MAX(w.weekly_revenue) as weekly_revenue,
-                   MAX(w.cumulative_revenue) as cumulative_revenue,
-                   MAX(w.theater_count) as theater_count,
-                   MAX(w.weekly_tickets) as weekly_tickets,
-                   MAX(w.report_date_start) as report_date_start,
-                   MAX(w.report_date_end) as report_date_end
-            FROM movie m
-            JOIN weeklyboxoffice w ON m.id = w.movie_id
-            WHERE 1=1
-        """
-    else:
+            if not latest_date_result or not latest_date_result[0]:
+                 # DB is completely empty
+                conn.close()
+                return {"movies": [], "total": 0, "page": page, "limit": limit, "total_pages": 0}
+                
+            target_date = latest_date_result[0]
+        else:
+            pass
+        
         query = """
             SELECT m.id, m.name, m.release_date, m.country, m.distributor,
                    w.weekly_revenue, w.cumulative_revenue, w.theater_count, w.weekly_tickets,
@@ -353,84 +300,107 @@ def get_movies(
             JOIN weeklyboxoffice w ON m.id = w.movie_id
             WHERE 1=1
         """
-    params = []
+        params = []
 
-    # 2. Date Filtering
-    if not search:
-        # If NOT searching, we MUST show a specific week (Latest or Requested)
-        # Since I replaced year/week cols with report_date, I'll default to Latest.
-        cursor.execute("SELECT MAX(report_date_start) FROM weeklyboxoffice")
-        latest_date = cursor.fetchone()[0]
-        query += " AND w.report_date_start = ?"
-        params.append(latest_date)
-    else:
-        # If searching, we don't restrict by date (Global Search)
-        pass
-
-    if search:
-        query += " AND (m.name LIKE ?)"
-        params.extend([f"%{search}%"])
-        
-    if country and country != "所有國家":
-        if country == "其他":
-            main_countries = ['台灣', '美國', '日本', '韓國', '香港', '泰國', '越南', '馬來西亞', '新加坡', '印尼', '菲律賓', '東南亞']
-            placeholders = ', '.join(['?'] * len(main_countries))
-            query += f" AND m.country NOT IN ({placeholders})"
-            params.extend(main_countries)
+        # 1. Base Query
+        if search:
+            query = """
+                SELECT m.id, m.name, m.release_date, m.country, m.distributor,
+                       MAX(w.weekly_revenue) as weekly_revenue,
+                       MAX(w.cumulative_revenue) as cumulative_revenue,
+                       MAX(w.theater_count) as theater_count,
+                       MAX(w.weekly_tickets) as weekly_tickets,
+                       MAX(w.report_date_start) as report_date_start,
+                       MAX(w.report_date_end) as report_date_end
+                FROM movie m
+                JOIN weeklyboxoffice w ON m.id = w.movie_id
+                WHERE 1=1
+            """
         else:
-            query += " AND m.country = ?"
-            params.append(country)
-    
-    if search:
-        query += " GROUP BY m.id"
+            query = """
+                SELECT m.id, m.name, m.release_date, m.country, m.distributor,
+                       w.weekly_revenue, w.cumulative_revenue, w.theater_count, w.weekly_tickets,
+                       w.report_date_start, w.report_date_end
+                FROM movie m
+                JOIN weeklyboxoffice w ON m.id = w.movie_id
+                WHERE 1=1
+            """
+        params = []
 
-    # Sort
-    order_col = "cumulative_revenue" if sort_by == "cumulative_revenue" else "weekly_revenue"
-    query += f" ORDER BY {order_col} DESC"
+        # 2. Date Filtering
+        if not search:
+            cursor.execute("SELECT MAX(report_date_start) FROM weeklyboxoffice")
+            latest_date = cursor.fetchone()["MAX(report_date_start)"] if isinstance(cursor.fetchone(), dict) else cursor.fetchone()[0]
+            query += " AND w.report_date_start = ?"
+            params.append(latest_date)
 
-    print("DEBUG QUERY:", query)
-    print("DEBUG PARAMS:", params)
-    
-    all_results = cursor.execute(query, params).fetchall()
-    
-    # Pagination
-    total_count = len(all_results)
-    start = (page - 1) * limit
-    end = start + limit
-    paginated_rows = all_results[start:end]
-    
-    formatted_results = []
-    for row in paginated_rows:
-        r = dict(row)
-        # Normalize country: treat "中華民國" as "台灣"
-        country = r.get("country")
-        if country == "中華民國":
-            country = "台灣"
-        formatted_results.append({
-            "id": r["id"],
-            "name": r["name"],
-            "english_name": None,
-            "release_date": r.get("release_date"),
-            "distributor": r.get("distributor"),
-            "country": country,
-            "cumulative_revenue": r.get("cumulative_revenue", 0),
-            "weekly_revenue": r.get("weekly_revenue", 0),
-            "theater_count": r.get("theater_count", 0),
-            "tickets": r.get("weekly_tickets"),
-            "is_active": True
-        })
+        if search:
+            query += " AND (m.name LIKE ?)"
+            params.extend([f"%{search}%"])
+            
+        if country and country != "所有國家":
+            if country == "其他":
+                main_countries = ['台灣', '美國', '日本', '韓國', '香港', '泰國', '越南', '馬來西亞', '新加坡', '印尼', '菲律賓', '東南亞']
+                placeholders = ', '.join(['?'] * len(main_countries))
+                query += f" AND m.country NOT IN ({placeholders})"
+                params.extend(main_countries)
+            else:
+                query += " AND m.country = ?"
+                params.append(country)
+        
+        if search:
+            query += " GROUP BY m.id, m.name, m.release_date, m.country, m.distributor"
 
-    conn.close()
+        # Sort
+        order_col = "cumulative_revenue" if sort_by == "cumulative_revenue" else "weekly_revenue"
+        query += f" ORDER BY {order_col} DESC"
 
-    return {
-        "movies": formatted_results,
-        "total": total_count,
-        "page": page,
-        "limit": limit,
-        "total_pages": (total_count + limit - 1) // limit if limit > 0 else 1,
-        "debug_query": query,
-        "debug_params": params
-    }
+        # print("DEBUG QUERY:", query)
+        # print("DEBUG PARAMS:", params)
+        
+        all_results = cursor.execute(query, params).fetchall()
+        
+        # Pagination
+        total_count = len(all_results)
+        start = (page - 1) * limit
+        end = start + limit
+        paginated_rows = all_results[start:end]
+        
+        formatted_results = []
+        for row in paginated_rows:
+            r = dict(row)
+            # Normalize country: treat "中華民國" as "台灣"
+            c = r.get("country")
+            if c == "中華民國":
+                c = "台灣"
+            formatted_results.append({
+                "id": r["id"],
+                "name": r["name"],
+                "english_name": None,
+                "release_date": str(r.get("release_date")) if r.get("release_date") else None,
+                "distributor": r.get("distributor"),
+                "country": c,
+                "cumulative_revenue": r.get("cumulative_revenue", 0),
+                "weekly_revenue": r.get("weekly_revenue", 0),
+                "theater_count": r.get("theater_count", 0),
+                "tickets": r.get("weekly_tickets"),
+                "is_active": True
+            })
+
+        conn.close()
+
+        return {
+            "movies": formatted_results,
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": (total_count + limit - 1) // limit if limit > 0 else 1,
+            "debug_query": query,
+            "debug_params": params
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Database error in /movies: {str(e)}")
 
 
 @app.get("/movies/{movie_id}/details")
