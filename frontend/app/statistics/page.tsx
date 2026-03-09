@@ -177,8 +177,7 @@ export default function StatisticsPage() {
 
                 {/* Header */}
                 <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20 shadow-2xl">
-                    <h1 className="text-3xl font-bold text-white mb-2">全台票房統計資料</h1>
-                    <p className="text-purple-200">Interactive Market Analysis & Reports</p>
+                    <h1 className="text-3xl font-bold text-white mb-0">全台票房統計資料</h1>
                 </div>
 
                 {/* 1. Interactive Trend Chart */}

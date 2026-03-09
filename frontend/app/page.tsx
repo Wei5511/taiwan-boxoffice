@@ -531,7 +531,7 @@ export default function Home() {
           <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div>
               <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                <span className="text-orange-500">📊</span> 票房趨勢比較分析 (Trend Comparison)
+                <span className="text-orange-500">📊</span> 票房趨勢比較分析
               </h3>
 
               <div className="relative mb-4 w-full md:w-96">
@@ -598,7 +598,7 @@ export default function Home() {
               {compareData.length > 0 ? (
                 <div className="space-y-4">
                   <div className="bg-[#111827] p-4 rounded-lg border border-gray-800 min-h-[400px]">
-                    <h4 className="text-sm font-bold text-gray-400 mb-6 text-center uppercase tracking-widest">累積票房成長趨勢 (Cumulative Revenue)</h4>
+                    <h4 className="text-sm font-bold text-gray-400 mb-6 text-center uppercase tracking-widest">累積票房成長趨勢</h4>
                     <div className="h-[350px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={compareData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
