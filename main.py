@@ -175,12 +175,25 @@ app.add_middleware(
 @app.post("/admin/trigger-scrape")
 def trigger_scrape_now():
     """Manually trigger a box office scrape immediately (for testing/on-demand)."""
+    global _is_scraping
     if _is_scraping:
         return {"status": "skipped", "message": "A scrape is already in progress."}
     import threading
-    thread = threading.Thread(target=scheduled_scrape_task, daemon=True)
-    thread.start()
-    return {"status": "started", "message": "Scraping task started in the background."}
+    threading.Thread(target=scheduled_scrape_task, daemon=True).start()
+    return {"status": "started", "message": "Scrape task initiated in background."}
+
+@app.get("/admin/import-2020")
+def import_2020_data():
+    """Temporary endpoint to trigger the 2020 data import script via Render's IPv6-capable env."""
+    import threading
+    def run_import():
+        try:
+            from scripts.import_data import import_data
+            import_data()
+        except Exception as e:
+            print(f"Import failed: {e}")
+    threading.Thread(target=run_import, daemon=True).start()
+    return {"status": "started", "message": "2020 data import initiated in background."}
 
 
 @app.get("/admin/scheduler-status")
