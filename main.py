@@ -110,6 +110,13 @@ def scheduled_scrape_task():
 # --- FastAPI Lifespan ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Run DB diagnostic on startup (output goes to Render logs)
+    try:
+        from test_db import diagnose
+        diagnose()
+    except Exception as e:
+        print(f"[Startup] DB diagnostic failed: {e}")
+    
     scheduler = BackgroundScheduler(daemon=True)
     # Run every day at 03:00 AM (Taiwan time, UTC+8)
     scheduler.add_job(
