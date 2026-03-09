@@ -169,7 +169,20 @@ def compare_movies(movie_ids: str):
     
     movie_weeks = {m_id: [] for m_id in ids}
     for row in history:
-        movie_weeks[row["movie_id"]].append(dict(row))
+        d = dict(row)
+        m_id = d["movie_id"]
+        
+        # Fallback for missing cumulative_tickets: previous_cumulative + current_weekly
+        if not d.get("cumulative_tickets"):
+            prev_cum = 0
+            if movie_weeks[m_id]:
+                prev_cum = movie_weeks[m_id][-1].get("cumulative_tickets") or 0
+            
+            weekly_tix = d.get("weekly_tickets") or 0
+            if prev_cum or weekly_tix:
+                d["cumulative_tickets"] = prev_cum + weekly_tix
+
+        movie_weeks[m_id].append(d)
         
     max_weeks = max([len(weeks) for weeks in movie_weeks.values()] + [0])
     

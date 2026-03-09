@@ -643,8 +643,8 @@ export default function Home() {
                                             </span>
                                           </div>
                                           <div className="ml-2 font-medium" style={{ color: entry.color }}>
-                                            票數: {cumulativeTickets ? Number(cumulativeTickets).toLocaleString() : '無資料'}
-                                            {weeklyTickets ? (
+                                            票數: {cumulativeTickets != null ? Number(cumulativeTickets).toLocaleString() : '無資料'}
+                                            {weeklyTickets != null ? (
                                               <span style={{ color: entry.color, opacity: 0.7 }} className="ml-1">
                                                 (+{Number(weeklyTickets).toLocaleString()})
                                               </span>
