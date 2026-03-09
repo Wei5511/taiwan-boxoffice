@@ -26,22 +26,31 @@ except ImportError:
 def get_db_connection():
     """
     Returns a database connection.
-    - In production (DATABASE_URL set): connects to PostgreSQL via psycopg2
-    - Locally: connects to SQLite
-    Includes full error logging for Render visibility.
+    NUCLEAR FIX: Manually constructs DSN from components to avoid
+    URL-parsing issues with special characters (like '!' in password).
     """
     db_url = os.getenv("DATABASE_URL")
     if db_url and psycopg2:
         try:
-            # psycopg2 accepts both postgres:// and postgresql:// URI schemes.
-            # However, some providers give postgres:// which SQLAlchemy rejects.
-            # For psycopg2 direct connection, both work fine.
-            # Log sanitized URL for debugging (mask password)
-            parts = db_url.split("@")
-            sanitized = parts[0].split(":")[0] + ":***@" + parts[-1] if len(parts) > 1 else "***"
-            print(f"[get_db_connection] Connecting to PostgreSQL: {sanitized}")
+            # Build DSN from individual components (avoids URL parsing bugs)
+            DB_USER = os.getenv("DB_USER", "postgres.ufiwrwbfbxyqamkikpia")
+            DB_PASSWORD = os.getenv("DB_PASSWORD", "Wei03230501!")
+            DB_HOST = os.getenv("DB_HOST", "aws-0-ap-northeast-1.pooler.supabase.com")
+            DB_PORT = os.getenv("DB_PORT", "6543")
+            DB_NAME = os.getenv("DB_NAME", "postgres")
             
-            conn = psycopg2.connect(db_url, cursor_factory=RealDictCursor)
+            print(f"[get_db_connection] Connecting to PostgreSQL: {DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
+            
+            # Use keyword arguments (NOT a URI) — this bypasses all URL encoding issues
+            conn = psycopg2.connect(
+                host=DB_HOST,
+                port=int(DB_PORT),
+                user=DB_USER,
+                password=DB_PASSWORD,
+                dbname=DB_NAME,
+                sslmode="require",
+                cursor_factory=RealDictCursor
+            )
             print("[get_db_connection] PostgreSQL connection successful")
             
             class CursorWrapper:

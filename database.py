@@ -1,14 +1,40 @@
 import os
+from urllib.parse import quote_plus
 from sqlmodel import SQLModel, create_engine, Session
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if DATABASE_URL:
-    # SQLAlchemy requires 'postgresql://' instead of 'postgres://'
-    if DATABASE_URL.startswith("postgres://"):
-        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-    print(f"[database.py] Using PostgreSQL engine (DATABASE_URL found)")
-    engine = create_engine(DATABASE_URL, echo=False)
+    # === NUCLEAR FIX: Manually construct the URL ===
+    # The raw DATABASE_URL from Render/Supabase can have special characters
+    # (like '!' in the password) that break URL parsing.
+    # We manually construct it with proper encoding.
+    
+    DB_USER = os.getenv("DB_USER", "postgres.ufiwrwbfbxyqamkikpia")
+    DB_PASSWORD = os.getenv("DB_PASSWORD", "Wei03230501!")
+    DB_HOST = os.getenv("DB_HOST", "aws-0-ap-northeast-1.pooler.supabase.com")
+    DB_PORT = os.getenv("DB_PORT", "6543")
+    DB_NAME = os.getenv("DB_NAME", "postgres")
+    
+    # quote_plus ensures '!' and other special chars are properly escaped
+    encoded_password = quote_plus(DB_PASSWORD)
+    
+    # SQLAlchemy requires 'postgresql://' scheme
+    CONSTRUCTED_URL = (
+        f"postgresql://{DB_USER}:{encoded_password}"
+        f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    )
+    
+    print(f"[database.py] Using PostgreSQL engine")
+    print(f"[database.py]   Host: {DB_HOST}:{DB_PORT}")
+    print(f"[database.py]   User: {DB_USER}")
+    print(f"[database.py]   DB:   {DB_NAME}")
+    
+    engine = create_engine(
+        CONSTRUCTED_URL,
+        echo=False,
+        connect_args={"sslmode": "require"}
+    )
 else:
     sqlite_file_name = "boxoffice.db"
     sqlite_url = f"sqlite:///{sqlite_file_name}"
