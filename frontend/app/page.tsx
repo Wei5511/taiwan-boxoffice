@@ -626,13 +626,30 @@ export default function Home() {
                                     <p className="text-white font-bold mb-3 text-sm border-b border-gray-600 pb-2">上映第 {label} 週</p>
                                     {payload.map((entry: any, index: number) => {
                                       const movieId = String(entry.dataKey).split('_')[0];
-                                      const ticketsKey = `${movieId}_tickets`;
-                                      const tickets = entry.payload[ticketsKey];
+
+                                      const cumulativeRevenue = entry.value;
+                                      const weeklyRevenue = entry.payload[`${movieId}_weekly`];
+
+                                      const cumulativeTickets = entry.payload[`${movieId}_cumulative_tickets`];
+                                      const weeklyTickets = entry.payload[`${movieId}_weekly_tickets`];
+
                                       return (
-                                        <div key={index} className="text-sm mb-2 flex flex-col gap-0.5">
-                                          <span className="font-bold" style={{ color: entry.color }}>{entry.name}</span>
-                                          <span className="text-blue-300 ml-2">票房: ${Number(entry.value).toLocaleString()}</span>
-                                          <span className="text-green-300 ml-2">票數: {tickets ? Number(tickets).toLocaleString() : '無資料'}</span>
+                                        <div key={index} className="text-sm mb-3 flex flex-col gap-1">
+                                          <span className="font-bold mb-1" style={{ color: entry.color }}>{entry.name}</span>
+                                          <div className="ml-2 font-medium" style={{ color: entry.color }}>
+                                            票房: ${Number(cumulativeRevenue).toLocaleString()}
+                                            <span style={{ color: entry.color, opacity: 0.7 }} className="ml-1">
+                                              (+{Number(weeklyRevenue).toLocaleString()})
+                                            </span>
+                                          </div>
+                                          <div className="ml-2 font-medium" style={{ color: entry.color }}>
+                                            票數: {cumulativeTickets ? Number(cumulativeTickets).toLocaleString() : '無資料'}
+                                            {weeklyTickets ? (
+                                              <span style={{ color: entry.color, opacity: 0.7 }} className="ml-1">
+                                                (+{Number(weeklyTickets).toLocaleString()})
+                                              </span>
+                                            ) : null}
+                                          </div>
                                         </div>
                                       );
                                     })}

@@ -159,7 +159,7 @@ def compare_movies(movie_ids: str):
     movies = cursor.execute(f"SELECT id, name FROM movie WHERE id IN ({placeholders})", ids).fetchall()
     
     history = cursor.execute(f"""
-        SELECT movie_id, weekly_revenue, cumulative_revenue, theater_count, weekly_tickets, report_date_start
+        SELECT movie_id, weekly_revenue, cumulative_revenue, theater_count, weekly_tickets, cumulative_tickets, report_date_start
         FROM weeklyboxoffice
         WHERE movie_id IN ({placeholders})
         ORDER BY report_date_start ASC
@@ -183,12 +183,14 @@ def compare_movies(movie_ids: str):
                 week_data[f"{m_id}_weekly"] = w["weekly_revenue"]
                 week_data[f"{m_id}_cumulative"] = w["cumulative_revenue"]
                 week_data[f"{m_id}_theaters"] = w["theater_count"]
-                week_data[f"{m_id}_tickets"] = w["weekly_tickets"]
+                week_data[f"{m_id}_weekly_tickets"] = w["weekly_tickets"]
+                week_data[f"{m_id}_cumulative_tickets"] = w["cumulative_tickets"]
             else:
                 week_data[f"{m_id}_weekly"] = None
                 week_data[f"{m_id}_cumulative"] = None
                 week_data[f"{m_id}_theaters"] = None
-                week_data[f"{m_id}_tickets"] = None
+                week_data[f"{m_id}_weekly_tickets"] = None
+                week_data[f"{m_id}_cumulative_tickets"] = None
         data.append(week_data)
         
     return {
