@@ -6,24 +6,26 @@ import psycopg2
 # === THE ABSOLUTE FINAL NUCLEAR FIX ===
 # Bypass SQLAlchemy URL string parsing completely using `creator` function.
 
-IS_PRODUCTION = bool(os.getenv("DATABASE_URL") or os.getenv("RENDER"))
+# Force PostgreSQL if DATABASE_URL is present.
+# No silent fallback to SQLite in production if the env var exists but connection fails.
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-if IS_PRODUCTION:
-    print("[database.py] Using PostgreSQL (Bypassing URL parsing via creator)")
+if DATABASE_URL:
+    print("[database.py] 🚀 DATABASE_URL detected. Forcing PostgreSQL (bypassing URL parsing).")
     def get_conn():
         return psycopg2.connect(
             host="aws-0-ap-northeast-1.pooler.supabase.com",
             port=5432,
             user="postgres.ufiwrwbfbxyqamkikpia",
-            password="Wei03230501!",  # Raw password, no URL encoding needed
+            password="Wei03230501!",  # Raw password, no URL parsing
             database="postgres",
             sslmode="require"
         )
     engine = create_engine("postgresql+psycopg2://", creator=get_conn, echo=False)
 else:
+    print("[database.py] ⚠️ DATABASE_URL not found. Falling back to SQLite.")
     sqlite_file_name = "boxoffice.db"
     sqlite_url = f"sqlite:///{sqlite_file_name}"
-    print(f"[database.py] Using SQLite: {sqlite_url}")
     engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
 
 def create_db_and_tables():

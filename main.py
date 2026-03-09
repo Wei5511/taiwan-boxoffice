@@ -129,6 +129,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[Startup] ❌ Database health check FAILED: {e}")
         traceback.print_exc()
+        
+    # --- Auto-Create Tables on Startup ---
+    try:
+        from database import create_db_and_tables
+        create_db_and_tables()
+        print("[Startup] ✅ Database tables validated/created.")
+    except Exception as e:
+        print(f"[Startup] ❌ Failed to create database tables: {e}")
+        traceback.print_exc()
     
     scheduler = BackgroundScheduler(daemon=True)
     # Run every day at 03:00 AM (Taiwan time, UTC+8)
