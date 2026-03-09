@@ -119,12 +119,16 @@ def scheduled_scrape_task():
 # --- FastAPI Lifespan ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Run DB diagnostic on startup (output goes to Render logs)
+    # --- Startup Health Check: verify DB connection ---
     try:
-        from test_db import diagnose
-        diagnose()
+        from sqlmodel import text as sql_text
+        from database import engine as db_engine
+        with db_engine.connect() as conn:
+            result = conn.execute(sql_text("SELECT 1"))
+            print(f"[Startup] ✅ Database health check PASSED (SELECT 1 = {result.scalar()})")
     except Exception as e:
-        print(f"[Startup] DB diagnostic failed: {e}")
+        print(f"[Startup] ❌ Database health check FAILED: {e}")
+        traceback.print_exc()
     
     scheduler = BackgroundScheduler(daemon=True)
     # Run every day at 03:00 AM (Taiwan time, UTC+8)
