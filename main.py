@@ -630,11 +630,11 @@ def get_dashboard_stats(
         .where(WeeklyBoxOffice.report_date_end == anchor_end)
     ).first() or 0
     
-    # Current month total (all weeks in current month of the anchor date)
+    # Current month total (only sum weeks that START in the current calendar month)
     month_start = anchor_end.replace(day=1)
     current_month_total = session.exec(
         select(func.sum(WeeklyBoxOffice.weekly_revenue))
-        .where(WeeklyBoxOffice.report_date_end >= month_start)
+        .where(WeeklyBoxOffice.report_date_start >= month_start)
         .where(WeeklyBoxOffice.report_date_end <= anchor_end)
     ).first() or 0
     
