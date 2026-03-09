@@ -99,7 +99,7 @@ export default function StatisticsPage() {
     // Fetch Movie Details
     const handleMovieClick = async (movieId: number) => {
         try {
-            const res = await axios.get(`http://127.0.0.1:8000/movies/${movieId}/details`);
+            const res = await import('@/lib/api').then(m => m.default.get(`/movies/${movieId}/details`));
             setSelectedMovieDetails(res.data);
             setIsModalOpen(true);
         } catch (error) {

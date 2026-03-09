@@ -917,7 +917,7 @@ def get_period_stats(
                    MAX(w.cumulative_tickets) as total_tickets
             FROM weeklyboxoffice w
             JOIN movie m ON w.movie_id = m.id
-            GROUP BY m.id
+            GROUP BY m.id, m.name, m.release_date
             ORDER BY total_rev DESC
             LIMIT 200
         """).fetchall()
@@ -971,7 +971,7 @@ def get_period_stats(
         FROM weeklyboxoffice w
         JOIN movie m ON w.movie_id = m.id
         WHERE w.report_date_start >= ? AND w.report_date_start <= ?
-        GROUP BY m.id
+        GROUP BY m.id, m.name, m.release_date
         ORDER BY period_rev DESC
     """, (start_str, end_str)).fetchall()
 
