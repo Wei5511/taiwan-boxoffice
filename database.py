@@ -1,28 +1,25 @@
 import os
 import urllib.parse
 from sqlmodel import SQLModel, create_engine, Session
+import psycopg2
 
-# === PERMANENT FIX: Hardcode-safe URL assembly ===
-# Force-encode the password and construct the URL manually
-# to prevent special characters (like '!') from breaking URL parsing.
-
-DB_USER = os.getenv("DB_USER", "postgres.ufiwrwbfbxyqamkikpia")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "Wei03230501!")
-DB_HOST = os.getenv("DB_HOST", "aws-0-ap-northeast-1.pooler.supabase.com")
-DB_PORT = os.getenv("DB_PORT", "6543")
-DB_NAME = os.getenv("DB_NAME", "postgres")
+# === THE ABSOLUTE FINAL NUCLEAR FIX ===
+# Bypass SQLAlchemy URL string parsing completely using `creator` function.
 
 IS_PRODUCTION = bool(os.getenv("DATABASE_URL") or os.getenv("RENDER"))
 
 if IS_PRODUCTION:
-    encoded_password = urllib.parse.quote_plus(DB_PASSWORD)
-    DATABASE_URL = (
-        f"postgresql://{DB_USER}:{encoded_password}"
-        f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-        f"?sslmode=require"
-    )
-    print(f"[database.py] Using PostgreSQL: {DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
-    engine = create_engine(DATABASE_URL, echo=False)
+    print("[database.py] Using PostgreSQL (Bypassing URL parsing via creator)")
+    def get_conn():
+        return psycopg2.connect(
+            host="aws-0-ap-northeast-1.pooler.supabase.com",
+            port=5432,
+            user="postgres.ufiwrwbfbxyqamkikpia",
+            password="Wei03230501!",  # Raw password, no URL encoding needed
+            database="postgres",
+            sslmode="require"
+        )
+    engine = create_engine("postgresql+psycopg2://", creator=get_conn, echo=False)
 else:
     sqlite_file_name = "boxoffice.db"
     sqlite_url = f"sqlite:///{sqlite_file_name}"
