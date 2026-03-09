@@ -7,11 +7,13 @@ if DATABASE_URL:
     # SQLAlchemy requires 'postgresql://' instead of 'postgres://'
     if DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-    engine = create_engine(DATABASE_URL)
+    print(f"[database.py] Using PostgreSQL engine (DATABASE_URL found)")
+    engine = create_engine(DATABASE_URL, echo=False)
 else:
     sqlite_file_name = "boxoffice.db"
     sqlite_url = f"sqlite:///{sqlite_file_name}"
     connect_args = {"check_same_thread": False}
+    print(f"[database.py] Using SQLite engine: {sqlite_url}")
     engine = create_engine(sqlite_url, connect_args=connect_args)
 
 def create_db_and_tables():

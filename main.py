@@ -24,45 +24,64 @@ except ImportError:
     RealDictCursor = None
 
 def get_db_connection():
+    """
+    Returns a database connection.
+    - In production (DATABASE_URL set): connects to PostgreSQL via psycopg2
+    - Locally: connects to SQLite
+    Includes full error logging for Render visibility.
+    """
     db_url = os.getenv("DATABASE_URL")
     if db_url and psycopg2:
-        if db_url.startswith("postgres://"):
-            db_url = db_url.replace("postgres://", "postgresql://", 1)
-        
-        # Connect to PostgreSQL and wrap for SQLite compatibility
-        conn = psycopg2.connect(db_url, cursor_factory=RealDictCursor)
-        
-        class CursorWrapper:
-            def __init__(self, cursor):
-                self._cursor = cursor
-            def execute(self, query, params=()):
-                if '?' in query:
-                    # Very simple replace: assuming no literal '?' inside strings
-                    query = query.replace('?', '%s')
-                self._cursor.execute(query, params)
-                return self
-            def fetchall(self):
-                return self._cursor.fetchall()
-            def fetchone(self):
-                return self._cursor.fetchone()
-            def close(self):
-                self._cursor.close()
-            @property
-            def description(self):
-                return self._cursor.description
-        
-        class ConnWrapper:
-            def __init__(self, conn):
-                self._conn = conn
-            def cursor(self):
-                return CursorWrapper(self._conn.cursor())
-            def close(self):
-                self._conn.close()
-            def commit(self):
-                self._conn.commit()
-                
-        return ConnWrapper(conn)
+        try:
+            # psycopg2 accepts both postgres:// and postgresql:// URI schemes.
+            # However, some providers give postgres:// which SQLAlchemy rejects.
+            # For psycopg2 direct connection, both work fine.
+            # Log sanitized URL for debugging (mask password)
+            parts = db_url.split("@")
+            sanitized = parts[0].split(":")[0] + ":***@" + parts[-1] if len(parts) > 1 else "***"
+            print(f"[get_db_connection] Connecting to PostgreSQL: {sanitized}")
+            
+            conn = psycopg2.connect(db_url, cursor_factory=RealDictCursor)
+            print("[get_db_connection] PostgreSQL connection successful")
+            
+            class CursorWrapper:
+                def __init__(self, cursor):
+                    self._cursor = cursor
+                def execute(self, query, params=()):
+                    if '?' in query:
+                        query = query.replace('?', '%s')
+                    self._cursor.execute(query, params)
+                    return self
+                def fetchall(self):
+                    return self._cursor.fetchall()
+                def fetchone(self):
+                    return self._cursor.fetchone()
+                def close(self):
+                    self._cursor.close()
+                @property
+                def description(self):
+                    return self._cursor.description
+            
+            class ConnWrapper:
+                def __init__(self, conn):
+                    self._conn = conn
+                def cursor(self):
+                    return CursorWrapper(self._conn.cursor())
+                def close(self):
+                    self._conn.close()
+                def commit(self):
+                    self._conn.commit()
+                    
+            return ConnWrapper(conn)
+        except Exception as e:
+            print(f"[get_db_connection] FATAL: PostgreSQL connection failed: {e}")
+            traceback.print_exc()
+            raise
     else:
+        if not db_url:
+            print("[get_db_connection] No DATABASE_URL set, using local SQLite")
+        elif not psycopg2:
+            print("[get_db_connection] WARNING: DATABASE_URL is set but psycopg2 is not installed!")
         conn = sqlite3.connect(sqlite_file_name)
         conn.row_factory = sqlite3.Row
         return conn
