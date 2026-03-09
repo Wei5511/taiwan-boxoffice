@@ -10,8 +10,7 @@ develop-eggs/
 dist/
 downloads/
 eggs/
-lib/
-lib64/
+# Removed generic lib/ to unblock Next.js frontend/lib/
 parts/
 sdist/
 var/

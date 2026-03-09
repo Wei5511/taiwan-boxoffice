@@ -587,47 +587,62 @@ def get_dashboard_stats(
     # === KPIs ===
     # Use latest_week_end as the 'current' anchor time instead of real today, 
     # so metrics work even if data is old.
-    anchor_date = latest_week_end
+    # Logic Fix: Use the exact report_date_start from the latest record for ISO alignment
+    latest_report = session.exec(
+        select(WeeklyBoxOffice.report_date_start, WeeklyBoxOffice.report_date_end)
+        .order_by(WeeklyBoxOffice.report_date_end.desc())
+        .limit(1)
+    ).first()
+    
+    if not latest_report:
+        return {
+            "market_share": market_share,
+            "four_week_trend": four_week_trend,
+            "kpis": {
+                "current_week_total": 0,
+                "current_month_total": 0,
+                "active_movie_count": 0,
+                "weekly_new_releases": 0,
+                "monthly_new_releases": 0
+            }
+        }
+    
+    anchor_start, anchor_end = latest_report
     
     # Current week total (latest week)
     current_week_total = session.exec(
         select(func.sum(WeeklyBoxOffice.weekly_revenue))
-        .where(WeeklyBoxOffice.report_date_end == latest_week_end)
+        .where(WeeklyBoxOffice.report_date_end == anchor_end)
     ).first() or 0
     
     # Current month total (all weeks in current month of the anchor date)
-    month_start = anchor_date.replace(day=1)
+    month_start = anchor_end.replace(day=1)
     current_month_total = session.exec(
         select(func.sum(WeeklyBoxOffice.weekly_revenue))
         .where(WeeklyBoxOffice.report_date_end >= month_start)
-        .where(WeeklyBoxOffice.report_date_end <= anchor_date)
+        .where(WeeklyBoxOffice.report_date_end <= anchor_end)
     ).first() or 0
     
     # Active movie count (movies with weekly_revenue > 10000 in latest week)
     active_movie_count = session.exec(
         select(func.count(func.distinct(WeeklyBoxOffice.movie_id)))
-        .where(WeeklyBoxOffice.report_date_end == latest_week_end)
+        .where(WeeklyBoxOffice.report_date_end == anchor_end)
         .where(WeeklyBoxOffice.weekly_revenue > 10000)
     ).first() or 0
     
-    # Weekly new releases (Rolling 7 days from anchor)
-    week_start_str = (anchor_date - timedelta(days=7)).strftime("%Y-%m-%d")
-    anchor_str = anchor_date.strftime("%Y-%m-%d")
-    
+    # Weekly new releases (Strict ISO week boundaries)
     weekly_new_releases = session.exec(
         select(func.count(Movie.id))
-        .where(Movie.release_date >= week_start_str)
-        .where(Movie.release_date <= anchor_str)
+        .where(Movie.release_date >= anchor_start)
+        .where(Movie.release_date <= anchor_end)
         .where(Movie.release_date != None)
     ).first() or 0
     
-    # Monthly new releases (Rolling 30 days from anchor) - Fixes "0" issue
-    month_start_str = (anchor_date - timedelta(days=30)).strftime("%Y-%m-%d")
-    
+    # Monthly new releases (Calendar month up to anchor_end)
     monthly_new_releases = session.exec(
         select(func.count(Movie.id))
-        .where(Movie.release_date >= month_start_str)
-        .where(Movie.release_date <= anchor_str)
+        .where(Movie.release_date >= month_start)
+        .where(Movie.release_date <= anchor_end)
         .where(Movie.release_date != None)
     ).first() or 0
     

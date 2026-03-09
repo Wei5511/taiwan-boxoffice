@@ -8,7 +8,7 @@ import {
 import axios from 'axios';
 
 // --- CONSTANTS ---
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8001";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 const COLORS: Record<string, string> = {
   "台灣": "#ef4444", "美國": "#3b82f6", "日本": "#eab308",
   "韓國": "#22c55e", "香港": "#a855f7", "東南亞": "#f97316", "其他": "#9ca3af"
@@ -85,7 +85,7 @@ export default function Home() {
       return;
     }
     try {
-      const res = await axios.get(`http://127.0.0.1:8001/movies/compare`, {
+      const res = await axios.get(`http://127.0.0.1:8000/movies/compare`, {
         params: { movie_ids: ids.join(",") }
       });
       setCompareData(res.data.data || []);
@@ -129,7 +129,7 @@ export default function Home() {
       setLoading(true);
       // 1. Fetch Movies (Search or Default)
       // FORCE Explicit IPv4 URL to prevent Network Errors
-      const movieRes = await axios.get(`http://127.0.0.1:8001/movies`, {
+      const movieRes = await axios.get(`http://127.0.0.1:8000/movies`, {
         params: {
           search: query,
           sort_by: currentSort,
@@ -142,7 +142,7 @@ export default function Home() {
       // 2. Fetch Stats (Only if not searching, to keep context)
       if (!query) {
         // FORCE Explicit IPv4 URL to prevent Network Errors
-        const dashboardRes = await axios.get(`http://127.0.0.1:8001/dashboard-stats`);
+        const dashboardRes = await axios.get(`http://127.0.0.1:8000/dashboard-stats`);
         const d = dashboardRes.data;
         setStats(d.kpis);
 
@@ -189,7 +189,7 @@ export default function Home() {
       debounceTimer.current = setTimeout(async () => {
         try {
           // FORCE Explicit IPv4 URL to prevent Network Errors
-          const res = await axios.get(`http://127.0.0.1:8001/movies`, {
+          const res = await axios.get(`http://127.0.0.1:8000/movies`, {
             params: { search: val }
           });
           setSuggestions(res.data.movies ? res.data.movies.slice(0, 6) : []);
@@ -592,7 +592,7 @@ export default function Home() {
                     setCompareSearch(val);
                     if (val.trim().length > 0) {
                       try {
-                        const res = await axios.get(`http://127.0.0.1:8001/movies`, { params: { search: val } });
+                        const res = await axios.get(`http://127.0.0.1:8000/movies`, { params: { search: val } });
                         setCompareSuggestions(res.data.movies ? res.data.movies.slice(0, 5) : []);
                       } catch (e) {
                         console.error(e);
