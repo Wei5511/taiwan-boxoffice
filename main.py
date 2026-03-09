@@ -108,17 +108,20 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown(wait=False)
     print("[Scheduler] Background scheduler stopped.")
 
-app = FastAPI(title="Taiwan Box Office API", lifespan=lifespan)
+app = FastAPI(title="Taiwan Box Office API", lifespan=lifespan, redirect_slashes=False)
 
 
 # CORS Middleware - Production Ready
+# NOTE: allow_credentials=True is INCOMPATIBLE with allow_origins=["*"].
+# Browsers enforce CORS spec: wildcard origin cannot be used with credentials.
+# Since our API is stateless (no cookies/sessions), credentials=False is correct.
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "*")
 allowed_origins = allowed_origins_env.split(",") if allowed_origins_env != "*" else ["*"]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
