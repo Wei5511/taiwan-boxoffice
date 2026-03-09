@@ -14,13 +14,12 @@ if DATABASE_URL:
     print("[database.py] 🚀 DATABASE_URL detected. Forcing PostgreSQL (bypassing URL parsing).")
     def get_conn():
         return psycopg2.connect(
-            host="aws-0-ap-northeast-1.pooler.supabase.com",
-            port=6543,
-            user="postgres.ufiwrwbfbxyqamkikpia",
+            host="db.ufiwrwbfbxyqamkikpia.supabase.co",
+            port=5432,
+            user="postgres",
             password="Wei03230501!",  # Raw password, no URL parsing
             database="postgres",
-            sslmode="require",
-            options="-c supavisor_session_id=main"
+            sslmode="require"
         )
     engine = create_engine("postgresql+psycopg2://", creator=get_conn, echo=False)
 else:
