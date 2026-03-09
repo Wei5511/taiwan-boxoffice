@@ -15,11 +15,12 @@ if DATABASE_URL:
     def get_conn():
         return psycopg2.connect(
             host="aws-0-ap-northeast-1.pooler.supabase.com",
-            port=5432,
+            port=6543,
             user="postgres.ufiwrwbfbxyqamkikpia",
             password="Wei03230501!",  # Raw password, no URL parsing
             database="postgres",
-            sslmode="require"
+            sslmode="require",
+            options="-c supavisor_session_id=main"
         )
     engine = create_engine("postgresql+psycopg2://", creator=get_conn, echo=False)
 else:
