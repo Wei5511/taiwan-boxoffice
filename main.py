@@ -618,16 +618,25 @@ def get_dashboard_stats(
 
     four_week_trend = []
     for row in trend_rows:
-        d = datetime.strptime(row["report_date_end"], "%Y-%m-%d")
+        d_val = row["report_date_end"]
+        if isinstance(d_val, str):
+            d = datetime.strptime(d_val, "%Y-%m-%d").date()
+        elif isinstance(d_val, datetime):
+            d = d_val.date()
+        else:
+            d = d_val
+            
         iso_cal = d.isocalendar()
         iso_year = iso_cal[0]
         iso_week = iso_cal[1]
+        
+        # Need to properly serialize the date component
         four_week_trend.append({
             "year": iso_year,
             "week": iso_week,
             "week_label": f"W{iso_week}",
             "revenue": row["revenue"] or 0,
-            "date": row["report_date_end"]
+            "date": str(d_val)
         })
     
     # === KPIs ===
