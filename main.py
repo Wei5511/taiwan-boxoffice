@@ -455,7 +455,16 @@ def get_movie_details(movie_id: int):
 
     history_list = []
     for h in history:
-        d = datetime.strptime(h["report_date_end"], "%Y-%m-%d")
+        d_val = h["report_date_end"]
+        
+        # PostgreSQL returns date objects, SQLite returns strings
+        if isinstance(d_val, str):
+            d = datetime.strptime(d_val, "%Y-%m-%d").date()
+        elif isinstance(d_val, datetime):
+            d = d_val.date()
+        else:
+            d = d_val
+            
         iso_year, iso_week, _ = d.isocalendar()
         history_list.append({
             "year": iso_year,

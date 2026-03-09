@@ -85,7 +85,7 @@ export default function Home() {
       return;
     }
     try {
-      const res = await axios.get(`http://127.0.0.1:8000/movies/compare`, {
+      const res = await axios.get(`${API_BASE}/movies/compare`, {
         params: { movie_ids: ids.join(",") }
       });
       setCompareData(res.data.data || []);
@@ -128,8 +128,8 @@ export default function Home() {
     try {
       setLoading(true);
       // 1. Fetch Movies (Search or Default)
-      // FORCE Explicit IPv4 URL to prevent Network Errors
-      const movieRes = await axios.get(`http://127.0.0.1:8000/movies`, {
+      // Use dynamic API_BASE instead of hardcoded IPv4
+      const movieRes = await axios.get(`${API_BASE}/movies`, {
         params: {
           search: query,
           sort_by: currentSort,
@@ -141,8 +141,7 @@ export default function Home() {
 
       // 2. Fetch Stats (Only if not searching, to keep context)
       if (!query) {
-        // FORCE Explicit IPv4 URL to prevent Network Errors
-        const dashboardRes = await axios.get(`http://127.0.0.1:8000/dashboard-stats`);
+        const dashboardRes = await axios.get(`${API_BASE}/dashboard-stats`);
         const d = dashboardRes.data;
         setStats(d.kpis);
 
@@ -187,8 +186,7 @@ export default function Home() {
       // Wait 400ms after the user STOPS typing before hitting the API
       debounceTimer.current = setTimeout(async () => {
         try {
-          // FORCE Explicit IPv4 URL to prevent Network Errors
-          const res = await axios.get(`http://127.0.0.1:8000/movies`, {
+          const res = await axios.get(`${API_BASE}/movies`, {
             params: { search: val }
           });
           setSuggestions(res.data.movies ? res.data.movies.slice(0, 6) : []);
@@ -545,7 +543,7 @@ export default function Home() {
                       setCompareSearch(val);
                       if (val.trim().length > 0) {
                         try {
-                          const res = await axios.get(`http://127.0.0.1:8000/movies`, { params: { search: val } });
+                          const res = await axios.get(`${API_BASE}/movies`, { params: { search: val } });
                           setCompareSuggestions(res.data.movies ? res.data.movies.slice(0, 5) : []);
                         } catch (e) {
                           console.error(e);
