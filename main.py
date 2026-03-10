@@ -49,6 +49,7 @@ def get_db_connection():
                 password=DB_PASSWORD,
                 dbname=DB_NAME,
                 sslmode="require",
+                options="-c supavisor_session_id=main",
                 cursor_factory=RealDictCursor
             )
             print("[get_db_connection] PostgreSQL connection successful")
