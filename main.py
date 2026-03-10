@@ -305,14 +305,25 @@ def get_movies(
             cursor.execute("SELECT MAX(report_date_start) FROM weeklyboxoffice")
             latest_date_result = cursor.fetchone()
             
-            if not latest_date_result or not latest_date_result[0]:
+            if not latest_date_result:
                  # DB is completely empty
                 conn.close()
                 return {"movies": [], "total": 0, "page": page, "limit": limit, "total_pages": 0}
+            
+            # Handle both PostgreSQL RealDictRow and SQLite Row
+            if isinstance(latest_date_result, dict) or hasattr(latest_date_result, 'keys'):
+                _val = latest_date_result.get("max") or latest_date_result.get("MAX(report_date_start)")
+            else:
+                _val = latest_date_result[0]
+            
+            if not _val:
+                conn.close()
+                return {"movies": [], "total": 0, "page": page, "limit": limit, "total_pages": 0}
                 
-            target_date = latest_date_result[0]
+            target_date = _val
         else:
             pass
+
         
         query = """
             SELECT m.id, m.name, m.release_date, m.country, m.distributor,
@@ -352,7 +363,18 @@ def get_movies(
         # 2. Date Filtering
         if not search:
             cursor.execute("SELECT MAX(report_date_start) FROM weeklyboxoffice")
-            latest_date = cursor.fetchone()["MAX(report_date_start)"] if isinstance(cursor.fetchone(), dict) else cursor.fetchone()[0]
+            _max_date_row = cursor.fetchone()
+            if _max_date_row is None:
+                conn.close()
+                return {"movies": [], "total": 0, "page": page, "limit": limit, "total_pages": 0}
+            # PostgreSQL returns RealDictRow (dict-like), SQLite returns Row (tuple-like)
+            if isinstance(_max_date_row, dict) or hasattr(_max_date_row, 'keys'):
+                latest_date = _max_date_row.get("max") or _max_date_row.get("MAX(report_date_start)")
+            else:
+                latest_date = _max_date_row[0]
+            if not latest_date:
+                conn.close()
+                return {"movies": [], "total": 0, "page": page, "limit": limit, "total_pages": 0}
             query += " AND w.report_date_start = ?"
             params.append(latest_date)
 
