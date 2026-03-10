@@ -1,7 +1,7 @@
 import os
 import sys
 import json
-import requests
+import cloudscraper
 from datetime import datetime
 
 # Add parent directory to path to import backend modules
@@ -15,16 +15,11 @@ def import_data():
     SQLModel.metadata.create_all(engine)
     
     url = "https://boxofficetw.tfai.org.tw/stat/qsl?mode=Week&start=2020-02-17&ascending=false&orderedColumn=ReleaseDate&page=0&size=1000&region=all"
-    print(f"📡 Fetching JSON data from TFAI via lightweight requests...")
+    print(f"📡 Fetching JSON data from TFAI via cloudscraper...")
     
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Referer": "https://boxofficetw.tfai.org.tw/statistic",
-        "Origin": "https://boxofficetw.tfai.org.tw"
-    }
+    scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
     
-    res = requests.get(url, headers=headers, timeout=15)
+    res = scraper.get(url, timeout=15)
     
     try:
         data = res.json()
