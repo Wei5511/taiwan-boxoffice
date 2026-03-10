@@ -32,12 +32,22 @@ def get_db_connection():
     db_url = os.getenv("DATABASE_URL")
     if db_url and psycopg2:
         try:
-            # Build DSN from individual components (avoids URL parsing bugs)
-            DB_USER = os.getenv("DB_USER", "postgres.ufiwrwbfbxyqamkikpia")
-            DB_PASSWORD = os.getenv("DB_PASSWORD", "Wei03230501!")
-            DB_HOST = os.getenv("DB_HOST", "aws-0-ap-northeast-1.pooler.supabase.com")
-            DB_PORT = os.getenv("DB_PORT", "6543")
-            DB_NAME = os.getenv("DB_NAME", "postgres")
+            import urllib.parse
+            
+            # Parse DATABASE_URL if no specific DB_USER is provided.
+            # This ensures we get the actual tenant from the URL Railway configures.
+            parsed_url = urllib.parse.urlparse(db_url)
+            
+            DB_USER = os.getenv("DB_USER") or parsed_url.username or "postgres.ufiwrwbfbxyqamkikpia"
+            DB_PASSWORD = os.getenv("DB_PASSWORD") or parsed_url.password or "Wei03230501!"
+            DB_HOST = os.getenv("DB_HOST") or parsed_url.hostname or "aws-0-ap-northeast-1.pooler.supabase.com"
+            DB_PORT = os.getenv("DB_PORT") or str(parsed_url.port) or "6543"
+            DB_NAME = os.getenv("DB_NAME") or parsed_url.path.lstrip('/') or "postgres"
+            
+            # Reconstruct the raw password correctly if urllib unquoted it or not
+            # urllib.parse.urlparse unquotes the password in .password but we should use the raw parsed part if needed,
+            # or simply use the decoded password since kwargs accept decoded passwords.
+            DB_PASSWORD = urllib.parse.unquote(DB_PASSWORD)
             
             print(f"[get_db_connection] Connecting to PostgreSQL: {DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
             
