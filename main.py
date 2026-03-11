@@ -16,53 +16,25 @@ from apscheduler.schedulers.background import BackgroundScheduler
 # For direct SQLite connection (if needed for specific operations)
 sqlite_file_name = "boxoffice.db" # Assuming this is the SQLite database file
 
-try:
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
-except ImportError:
-    psycopg2 = None
-    RealDictCursor = None
+# No longer need psycopg2 directly for get_db_connection, as it uses database.engine
 
 def get_db_connection():
     """
-    Returns a database connection.
-    NUCLEAR FIX: Manually constructs DSN from components to avoid
-    URL-parsing issues with special characters (like '!' in password).
+    Returns a database connection using psycopg2.
+    Uses the raw DATABASE_URL string directly to prevent tenant parsing issues,
+    while still injecting the required supavisor_session_id for pooler compatibility.
     """
     db_url = os.getenv("DATABASE_URL")
     if db_url and psycopg2:
         try:
-            import urllib.parse
-            
-            # Parse DATABASE_URL if no specific DB_USER is provided.
-            # This ensures we get the actual tenant from the URL Railway configures.
-            parsed_url = urllib.parse.urlparse(db_url)
-            
-            DB_USER = os.getenv("DB_USER") or parsed_url.username or "postgres.ufiwrwbfbxyqamkikpia"
-            DB_PASSWORD = os.getenv("DB_PASSWORD") or parsed_url.password or "Wei03230501!"
-            DB_HOST = os.getenv("DB_HOST") or parsed_url.hostname or "aws-0-ap-northeast-1.pooler.supabase.com"
-            DB_PORT = os.getenv("DB_PORT") or str(parsed_url.port) or "6543"
-            DB_NAME = os.getenv("DB_NAME") or parsed_url.path.lstrip('/') or "postgres"
-            
-            # Reconstruct the raw password correctly if urllib unquoted it or not
-            # urllib.parse.urlparse unquotes the password in .password but we should use the raw parsed part if needed,
-            # or simply use the decoded password since kwargs accept decoded passwords.
-            DB_PASSWORD = urllib.parse.unquote(DB_PASSWORD)
-            
-            print(f"[get_db_connection] Connecting to PostgreSQL: {DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
-            
-            # Use keyword arguments (NOT a URI) — this bypasses all URL encoding issues
+            # psycopg2.connect accepts the full connection URI string directly!
+            # We simply append the options kwarg to satisfy Supabase IPv4 Pooler
             conn = psycopg2.connect(
-                host=DB_HOST,
-                port=int(DB_PORT),
-                user=DB_USER,
-                password=DB_PASSWORD,
-                dbname=DB_NAME,
-                sslmode="require",
+                db_url,
                 options="-c supavisor_session_id=main",
                 cursor_factory=RealDictCursor
             )
-            print("[get_db_connection] PostgreSQL connection successful")
+            print("[get_db_connection] PostgreSQL connection successful using raw DATABASE_URL")
             
             class CursorWrapper:
                 def __init__(self, cursor):
@@ -76,8 +48,6 @@ def get_db_connection():
                     return self._cursor.fetchall()
                 def fetchone(self):
                     return self._cursor.fetchone()
-                def close(self):
-                    self._cursor.close()
                 @property
                 def description(self):
                     return self._cursor.description
@@ -95,13 +65,10 @@ def get_db_connection():
             return ConnWrapper(conn)
         except Exception as e:
             print(f"[get_db_connection] FATAL: PostgreSQL connection failed: {e}")
-            traceback.print_exc()
             raise
     else:
         if not db_url:
             print("[get_db_connection] No DATABASE_URL set, using local SQLite")
-        elif not psycopg2:
-            print("[get_db_connection] WARNING: DATABASE_URL is set but psycopg2 is not installed!")
         conn = sqlite3.connect(sqlite_file_name)
         conn.row_factory = sqlite3.Row
         return conn
